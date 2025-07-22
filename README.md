@@ -4,7 +4,7 @@ Utilities for working with the Common Voice dataset
 Developed with Python 3.9.6
 
 The scripts in this repo can be used for:
-* scraping the download URLs and downloading each lanaguage dataset from the Common Voice website ()
+* scraping the download URLs and downloading each lanaguage dataset from the Common Voice website (https://commonvoice.mozilla.org/en/datasets)
 * Creating symlinks to the validated audio files by reading the `validated.tsv` file and matching it with the corrisponding audio file in directory `clips`
 * Renaming the validated TSV files (just housekeeping really)
 
