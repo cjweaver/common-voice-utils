@@ -8,9 +8,7 @@ This script automates the download process for Common Voice datasets by:
 3. Downloading datasets with resume capability (allows downloading on another machine)
 4. Optionally extracting archives
 
-
-This project uses webdriver-manager to handle Chromedriver installation automatically.
-No manual Chromedriver download required!
+Requires the suitable Chromedriver for your platform in the $PATH or in the same directory as this script.
 
 Usage:
     python common_voice_downloader.py --download_path /path/to/store/datasets
@@ -40,10 +38,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from tqdm import tqdm
 from webdriver_manager.chrome import ChromeDriverManager
-
-DATASETS_URL: str = "https://commonvoice.mozilla.org/en/datasets"
-COMMON_VOICE_VERSION: float = 21.0  # Version of Common Voice to download
-EMAIL: str = "your@email.goes.here"
 
 
 def parse_size(text: str) -> Tuple[float, Optional[str]]:
@@ -99,9 +93,7 @@ def warn_uncompressed_size(download_dir: Path) -> None:
     for archive in tqdm(archives, desc="Analyzing archives", unit="archive"):
         try:
             with tarfile.open(archive, "r:gz") as tar:
-                total_uncompressed_bytes += sum(
-                    member.size for member in tar.getmembers()
-                )
+                total_uncompressed_bytes += sum(member.size for member in tar.getmembers())
         except (tarfile.TarError, OSError) as e:
             print(f"Skipping {archive} due to read error: {e}")
 
@@ -170,11 +162,16 @@ def load_urls_json(file_path: Path) -> Dict[str, Dict[str, str]]:
     return dataset_url_and_filenames
 
 
-def get_datasets_to_download(download_dir: Path) -> Dict[str, Dict[str, str]]:
+def get_datasets_to_download(
+    download_dir: Path, email: str, datasets_url: str, common_voice_version: float
+) -> Dict[str, Dict[str, str]]:
     """Scrape Common Voice website to collect dataset download links.
 
     Args:
         download_dir: Directory where the dataset information will be saved
+        email: Email address used for authentication with Common Voice
+        datasets_url: URL for the Common Voice datasets page
+        common_voice_version: Version number of Common Voice to download
 
     Returns:
         Dictionary with dataset download information
@@ -191,11 +188,9 @@ def get_datasets_to_download(download_dir: Path) -> Dict[str, Dict[str, str]]:
     print("Collecting dataset download URLs from Common Voice website...")
 
     try:
-        driver.get(DATASETS_URL)
+        driver.get(datasets_url)
         select_element = wait.until(
-            EC.presence_of_element_located(
-                (By.CSS_SELECTOR, "select[name='bundleLocale']")
-            )
+            EC.presence_of_element_located((By.CSS_SELECTOR, "select[name='bundleLocale']"))
         )
         language_selector = Select(select_element)
 
@@ -215,23 +210,19 @@ def get_datasets_to_download(download_dir: Path) -> Dict[str, Dict[str, str]]:
             for row in rows:
                 cells = row.find_elements(By.TAG_NAME, "td")
                 version_text = cells[0].text
-                if version_text == f"Common Voice Corpus {COMMON_VOICE_VERSION}":
+                if version_text == f"Common Voice Corpus {common_voice_version}":
                     row.click()
                     break
 
             time.sleep(2)
 
             email_input = wait.until(
-                EC.visibility_of_element_located(
-                    (By.CSS_SELECTOR, "input[name='email']")
-                )
+                EC.visibility_of_element_located((By.CSS_SELECTOR, "input[name='email']"))
             )
             email_input.clear()
-            email_input.send_keys(EMAIL)
+            email_input.send_keys(email)
 
-            checkbox_size = wait.until(
-                EC.element_to_be_clickable((By.NAME, "confirmSize"))
-            )
+            checkbox_size = wait.until(EC.element_to_be_clickable((By.NAME, "confirmSize")))
             download_size_text = checkbox_size.accessible_name
             size_value, size_unit = parse_size(download_size_text)
             total_mb += to_megabytes(size_value, size_unit)
@@ -247,9 +238,7 @@ def get_datasets_to_download(download_dir: Path) -> Dict[str, Dict[str, str]]:
             time.sleep(1)
 
             download_link_button = wait.until(
-                EC.element_to_be_clickable(
-                    (By.CSS_SELECTOR, "a.download-language.button.rounded")
-                )
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "a.download-language.button.rounded"))
             )
             dataset_url = download_link_button.get_attribute("href")
 
@@ -265,10 +254,7 @@ def get_datasets_to_download(download_dir: Path) -> Dict[str, Dict[str, str]]:
     finally:
         driver.quit()
 
-    print(
-        f"Total size in MB (selected datasets): {total_mb:.2f} MB "
-        f"({total_mb / 1024:.2f} GB)"
-    )
+    print(f"Total size in MB (selected datasets): {total_mb:.2f} MB " f"({total_mb / 1024:.2f} GB)")
     save_urls_json(dataset_url_and_filenames, download_dir)
     return dataset_url_and_filenames
 
@@ -287,12 +273,8 @@ def create_dataset_directories(
         language_dir.mkdir(parents=True, exist_ok=True)
 
         download_filepath = language_dir / dataset_dict["dataset_archive_filename"]
-        dataset_url_and_filenames[dataset_language]["language_download_dir"] = str(
-            language_dir
-        )
-        dataset_url_and_filenames[dataset_language]["download_filepath"] = str(
-            download_filepath
-        )
+        dataset_url_and_filenames[dataset_language]["language_download_dir"] = str(language_dir)
+        dataset_url_and_filenames[dataset_language]["download_filepath"] = str(download_filepath)
 
 
 def _download_file(entry: Dict[str, str]) -> str:
@@ -322,9 +304,7 @@ def _download_file(entry: Dict[str, str]) -> str:
     if filepath.exists():
         local_size = filepath.stat().st_size
         if local_size == remote_size and remote_size > 0:
-            print(
-                f"{filepath} is already fully downloaded ({local_size} bytes). Skipping."
-            )
+            print(f"{filepath} is already fully downloaded ({local_size} bytes). Skipping.")
             return str(filepath)
     else:
         local_size = 0
@@ -390,9 +370,7 @@ def download_files(
     """
     entries = list(dataset_url_and_filenames.values())
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
-        future_to_entry = {
-            executor.submit(_download_file, entry): entry for entry in entries
-        }
+        future_to_entry = {executor.submit(_download_file, entry): entry for entry in entries}
         for future in concurrent.futures.as_completed(future_to_entry):
             entry = future_to_entry[future]
             try:
@@ -406,16 +384,18 @@ def parse_cmd_line_args():
     """Parse the command-line arguments.
 
     Returns:
-        argparse.Namespace: Parsed arguments containing the base directory path,
-        database path, and optional processing batch size.
+        argparse.Namespace: Parsed arguments containing paths and configuration options.
     """
-
-    parser = argparse.ArgumentParser(
-        description="Common Voice Downloader with Resume Feature."
-    )
+    parser = argparse.ArgumentParser(description="Common Voice Downloader with Resume Feature.")
     parser.add_argument(
         "--download_path",
         help="Path to store dataset archives.",
+        required=True,
+    )
+    parser.add_argument(
+        "--email",
+        type=str,
+        help="Email address to use in the download form.",
         required=True,
     )
     parser.add_argument(
@@ -432,6 +412,17 @@ def parse_cmd_line_args():
         action="store_true",
         help="Automatically extract downloaded .tar.gz files.",
     )
+    parser.add_argument(
+        "--datasets_url",
+        default="https://commonvoice.mozilla.org/en/datasets",
+        help="URL for the Common Voice datasets page (default: https://commonvoice.mozilla.org/en/datasets).",
+    )
+    parser.add_argument(
+        "--cv_version",
+        type=float,
+        default=21.0,
+        help="Version of Common Voice to download (default: 21.0).",
+    )
     return parser.parse_args()
 
 
@@ -439,6 +430,9 @@ def main() -> None:
     """Main entry point for the Common Voice dataset downloader."""
 
     args = parse_cmd_line_args()
+    email = args.email
+    datasets_url = args.datasets_url
+    common_voice_version = args.cv_version
     download_path = Path(args.download_path)
     download_path.mkdir(parents=True, exist_ok=True)
 
@@ -451,7 +445,9 @@ def main() -> None:
         dataset_map = load_urls_json(file_path)
     else:
         # Scrape from the Common Voice site
-        dataset_map = get_datasets_to_download(download_path)
+        dataset_map = get_datasets_to_download(
+            download_path, email, datasets_url, common_voice_version
+        )
 
     create_dataset_directories(dataset_map, download_path)
 

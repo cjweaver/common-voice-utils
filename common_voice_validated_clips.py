@@ -25,10 +25,36 @@ Example:
 
 """
 
+import argparse
 import csv
 import os
 import sys
 from pathlib import Path
+
+
+def parse_cmd_line_args() -> argparse.ArgumentParser:
+    """Parse the command line arguments
+
+    Returns:
+        argparse.Namespace: Object with input and output directories.
+    """
+
+    parser = argparse.ArgumentParser(
+        description=f"create symbolic links to the validated audio files from Common Voice datasets."
+    )
+
+    parser.add_argument(
+        "input_directory",
+        type=Path,
+        help=f"Path to directory containing Common Voice dataset(s)",
+    )
+
+    parser.add_argument(
+        "output_directory",
+        type=Path,
+        help="Path where symlinks will be created",
+    )
+    return parser
 
 
 def get_log_file_path() -> Path:
@@ -157,9 +183,6 @@ def create_symlinks_for_all_common_voice(top_level_dir: str, destination_root: s
 
 def main() -> None:
     """Process command line arguments and execute symlink creation."""
-    if len(sys.argv) < 3:
-        print("Usage: python script.py <top_level_common_voice_dir> <destination_root>")
-        sys.exit(1)
 
     top_level_dir = sys.argv[1]
     destination_root = sys.argv[2]
